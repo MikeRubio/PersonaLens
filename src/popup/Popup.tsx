@@ -1,18 +1,18 @@
-import React, { useState, useEffect } from 'react';
-import { useTranslation } from 'react-i18next';
-import { PersonaSelector } from './components/PersonaSelector';
-import { TestRunner } from './components/TestRunner';
-import { ReportViewer } from './components/ReportViewer';
-import { SettingsPanel } from './components/SettingsPanel';
-import { LanguageSelector } from './components/LanguageSelector';
-import { Settings, User, FileText, Zap, AlertCircle } from 'lucide-react';
+import React, { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
+import { PersonaSelector } from "./components/PersonaSelector";
+import { TestRunner } from "./components/TestRunner";
+import { ReportViewer } from "./components/ReportViewer";
+import { SettingsPanel } from "./components/SettingsPanel";
+import { LanguageSelector } from "./components/LanguageSelector";
+import { Settings, User, FileText, Zap, AlertCircle } from "lucide-react";
 
 interface TestReport {
   persona: string;
   issues: Array<{
     type: string;
     description: string;
-    severity: 'high' | 'medium' | 'low';
+    severity: "high" | "medium" | "low";
     suggestion: string;
   }>;
   summary: string;
@@ -21,17 +21,17 @@ interface TestReport {
 
 export function Popup() {
   const { t } = useTranslation();
-  const [selectedPersona, setSelectedPersona] = useState<string>('');
+  const [selectedPersona, setSelectedPersona] = useState<string>("");
   const [isTestRunning, setIsTestRunning] = useState(false);
   const [currentReport, setCurrentReport] = useState<TestReport | null>(null);
-  const [errorMessage, setErrorMessage] = useState<string>('');
+  const [errorMessage, setErrorMessage] = useState<string>("");
   const [showSettings, setShowSettings] = useState(false);
-  const [apiKey, setApiKey] = useState('');
+  const [apiKey, setApiKey] = useState("");
   const [testProgress, setTestProgress] = useState(0);
 
   useEffect(() => {
     // Load saved data
-    chrome.storage.local.get(['selectedPersona', 'apiKey'], (result) => {
+    chrome.storage.local.get(["selectedPersona", "apiKey"], (result) => {
       if (result.selectedPersona) setSelectedPersona(result.selectedPersona);
       if (result.apiKey) setApiKey(result.apiKey);
     });
@@ -44,19 +44,19 @@ export function Popup() {
 
   const handleRunTest = async () => {
     if (!selectedPersona || !apiKey) {
-      setErrorMessage(t('configureApiKey'));
+      setErrorMessage(t("configureApiKey"));
       return;
     }
 
     setIsTestRunning(true);
     setCurrentReport(null);
-    setErrorMessage('');
+    setErrorMessage("");
     setTestProgress(0);
 
     try {
       // Simulate progress updates
       const progressInterval = setInterval(() => {
-        setTestProgress(prev => {
+        setTestProgress((prev) => {
           if (prev >= 90) {
             clearInterval(progressInterval);
             return 90;
@@ -66,29 +66,32 @@ export function Popup() {
       }, 500);
 
       // Get current tab info
-      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-      
+      const [tab] = await chrome.tabs.query({
+        active: true,
+        currentWindow: true,
+      });
+
       setTestProgress(30);
-      
+
       // Ensure content script is loaded before sending messages
       await ensureContentScriptLoaded(tab.id!, tab.url!);
-      
+
       setTestProgress(50);
-      
+
       // Send message to content script to analyze page
       const pageData = await chrome.tabs.sendMessage(tab.id!, {
-        action: 'analyzePage',
-        persona: selectedPersona
+        action: "analyzePage",
+        persona: selectedPersona,
       });
 
       setTestProgress(70);
 
       // Send to background script for OpenAI analysis
       const report = await chrome.runtime.sendMessage({
-        action: 'generateReport',
+        action: "generateReport",
         pageData,
         persona: selectedPersona,
-        apiKey
+        apiKey,
       });
 
       clearInterval(progressInterval);
@@ -103,8 +106,10 @@ export function Popup() {
         }, 300);
       }
     } catch (error) {
-      console.error('Test failed:', error);
-      setErrorMessage(`Test failed: ${error.message || 'Unknown error occurred'}`);
+      console.error("Test failed:", error);
+      setErrorMessage(
+        `Test failed: ${error.message || "Unknown error occurred"}`
+      );
     } finally {
       setTimeout(() => {
         setIsTestRunning(false);
@@ -115,41 +120,53 @@ export function Popup() {
 
   const ensureContentScriptLoaded = async (tabId: number, tabUrl: string) => {
     // Check if we're on a restricted page where content scripts cannot run
-    if (tabUrl.startsWith('chrome://') || 
-        tabUrl.startsWith('chrome-extension://') || 
-        tabUrl.startsWith('edge://') || 
-        tabUrl.startsWith('about:') ||
-        tabUrl.startsWith('moz-extension://')) {
-      throw new Error('Cannot run tests on browser internal pages. Please navigate to a regular website and try again.');
+    if (
+      tabUrl.startsWith("chrome://") ||
+      tabUrl.startsWith("chrome-extension://") ||
+      tabUrl.startsWith("edge://") ||
+      tabUrl.startsWith("about:") ||
+      tabUrl.startsWith("moz-extension://")
+    ) {
+      throw new Error(
+        "Cannot run tests on browser internal pages. Please navigate to a regular website and try again."
+      );
     }
 
     // Check for other restricted URLs
-    if (tabUrl.includes('chrome.google.com/webstore') || 
-        tabUrl.includes('addons.mozilla.org') ||
-        tabUrl.includes('microsoftedge.microsoft.com')) {
-      throw new Error('Cannot run tests on browser extension stores. Please navigate to a regular website and try again.');
+    if (
+      tabUrl.includes("chrome.google.com/webstore") ||
+      tabUrl.includes("addons.mozilla.org") ||
+      tabUrl.includes("microsoftedge.microsoft.com")
+    ) {
+      throw new Error(
+        "Cannot run tests on browser extension stores. Please navigate to a regular website and try again."
+      );
     }
 
     try {
       // Try to ping the content script
-      await chrome.tabs.sendMessage(tabId, { action: 'ping' });
+      await chrome.tabs.sendMessage(tabId, { action: "ping" });
     } catch (error) {
       // If ping fails, inject the content script
-      console.log('Content script not found, injecting...');
+      console.log("Content script not found, injecting...");
       try {
         await chrome.scripting.executeScript({
           target: { tabId },
-          files: ['content.js']
+          files: ["content.js"],
         });
-        
+
         // Wait a moment for the script to initialize
-        await new Promise(resolve => setTimeout(resolve, 100));
-        
+        await new Promise((resolve) => setTimeout(resolve, 100));
+
         // Verify the script is now loaded
-        await chrome.tabs.sendMessage(tabId, { action: 'ping' });
+        await chrome.tabs.sendMessage(tabId, { action: "ping" });
       } catch (injectionError) {
-        console.error('Content script injection failed:', injectionError);
-        throw new Error(`Failed to load content script: ${injectionError.message || 'Unknown injection error'}. Please refresh the page and try again.`);
+        console.error("Content script injection failed:", injectionError);
+        throw new Error(
+          `Failed to load content script: ${
+            injectionError.message || "Unknown injection error"
+          }. Please refresh the page and try again.`
+        );
       }
     }
   };
@@ -180,14 +197,16 @@ export function Popup() {
             <div className="w-8 h-8 bg-gradient-to-r from-blue-600 to-blue-700 rounded-xl flex items-center justify-center shadow-sm">
               <User size={18} className="text-white" />
             </div>
-            <h1 className="text-lg font-semibold text-gray-900">{t('appName')}</h1>
+            <h1 className="text-lg font-semibold text-gray-900">
+              {t("appName")}
+            </h1>
           </div>
           <div className="flex items-center space-x-2">
             <LanguageSelector />
             <button
               onClick={() => setShowSettings(true)}
               className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-xl transition-colors"
-              aria-label={t('settings')}
+              aria-label={t("settings")}
             >
               <Settings size={18} />
             </button>
@@ -202,26 +221,31 @@ export function Popup() {
             {errorMessage && (
               <div className="bg-gradient-to-r from-red-50 to-red-100 border border-red-200 rounded-xl p-3 shadow-sm">
                 <div className="flex items-start space-x-2">
-                  <AlertCircle size={16} className="text-red-600 mt-0.5 flex-shrink-0" />
+                  <AlertCircle
+                    size={16}
+                    className="text-red-600 mt-0.5 flex-shrink-0"
+                  />
                   <div>
-                    <p className="text-sm font-medium text-red-800">{t('testFailed')}</p>
+                    <p className="text-sm font-medium text-red-800">
+                      {t("testFailed")}
+                    </p>
                     <p className="text-sm text-red-700 mt-1">{errorMessage}</p>
                     <button
-                      onClick={() => setErrorMessage('')}
+                      onClick={() => setErrorMessage("")}
                       className="text-xs text-red-600 hover:text-red-800 mt-2 underline"
                     >
-                      {t('dismiss')}
+                      {t("dismiss")}
                     </button>
                   </div>
                 </div>
               </div>
             )}
-            
+
             <PersonaSelector
               selectedPersona={selectedPersona}
               onPersonaSelect={handlePersonaSelect}
             />
-            
+
             <TestRunner
               selectedPersona={selectedPersona}
               isRunning={isTestRunning}
@@ -240,9 +264,7 @@ export function Popup() {
 
       {/* Footer */}
       <div className="bg-gradient-to-r from-white to-gray-50 border-t border-gray-200 px-4 py-2">
-        <p className="text-xs text-gray-500 text-center">
-          {t('footer')}
-        </p>
+        <p className="text-xs text-gray-500 text-center">{t("footer")}</p>
       </div>
     </div>
   );
